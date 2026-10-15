@@ -1,0 +1,31 @@
+
+name: Build AirCard GIF IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build unsigned IPA
+        run: |
+          chmod +x build-ipa.sh
+          ./build-ipa.sh Release
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirCard-GIF-IPA
+          path: build/AirCard-iOS.ipa
+          if-no-files-found: error
