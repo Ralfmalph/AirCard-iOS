@@ -1557,6 +1557,8 @@ struct WalletCardsTab: View {
     @State private var showSourceDialog: Bool = false
     @State private var isPhotosPickerPresented: Bool = false
     @State private var isDocumentPickerPresented: Bool = false
+    @State private var gifPreviewData: Data? = nil
+    @State private var showGIFPreview = false
     @State private var showCredits = false
     private struct CropRequest: Identifiable {
         let id = UUID()
@@ -1696,19 +1698,38 @@ struct WalletCardsTab: View {
             }
             .sheet(isPresented: $isDocumentPickerPresented, onDismiss: presentPendingCrop) {
                 DocumentPickerView(allowedContentTypes: [
-                    .image, .png, .jpeg, .heic,
+                    .image, .gif, .png, .jpeg, .heic,
                     UTType(filenameExtension: "webp") ?? .image,
                     UTType(filenameExtension: "tiff") ?? .image
                 ]) { url in
                     guard let picker = activePicker else { return }
                     if let data = try? Data(contentsOf: url),
                        let image = ImageEngine.safeImageFromData(data, maxDimension: 2560) {
-                        pendingCrop = CropRequest(image: image, target: picker)
+                        if url.pathExtension.lowercased() == "gif" || data.starts(with: Data("GIF8".utf8)) {
+                            // Wallet cache remains PNG. Keep original GIF separately for preview.
+                            switch picker {
+                            case .singleCard(let id): vm.setCardGIF(for: id, data: data, poster: image)
+                            case .bulkAll: vm.setGIFForAllCards(data: data, poster: image)
+                            }
+                            gifPreviewData = data
+                            showGIFPreview = true
+                        } else {
+                            pendingCrop = CropRequest(image: image, target: picker)
+                        }
                     } else {
                         pendingLoadError = true
                     }
                     activePicker = nil
                 }
+            }
+            .sheet(isPresented: $showGIFPreview) {
+                VStack(spacing: 16) {
+                    Text("Animated GIF preview").font(.headline)
+                    if let data = gifPreviewData { AirCardGIFPreview(data: data).aspectRatio(1.58, contentMode: .fit) }
+                    Text("Animation plays inside AirCard only. Apple Wallet uses a still PNG frame.")
+                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Button("Done") { showGIFPreview = false }
+                }.padding()
             }
             .sheet(item: $cropRequest, onDismiss: {
                 if !cropAccepted { isDocumentPickerPresented = true }
